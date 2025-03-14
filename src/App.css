@@ -1,38 +1,105 @@
-.App {
-  text-align: center;
+/* Estilos generales */
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f8f9fa;
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+.navbar {
+  background-color: #343a40;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
-}
-
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
+.sidebar {
+  min-height: calc(100vh - 56px);
+  background-color: #343a40;
   color: white;
 }
 
-.App-link {
-  color: #61dafb;
+.sidebar-link {
+  color: rgba(255, 255, 255, 0.8);
+  padding: 10px 15px;
+  display: block;
+  text-decoration: none;
+  transition: all 0.3s;
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.sidebar-link:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.sidebar-link.active {
+  background-color: #007bff;
+  color: white;
+}
+
+.card {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+}
+
+.login-container {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #343a40 0%, #495057 100%);
+}
+
+.login-form {
+  background-color: white;
+  padding: 30px;
+  border-radius: 10px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  width: 100%;
+  max-width: 400px;
+}
+
+/* Estilos para reportes */
+.reporte-container {
+  background-color: white;
+  padding: 20px;
+  border: 1px solid #ddd;
+  margin-bottom: 20px;
+}
+
+.firma-container {
+  margin-top: 30px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.firma-box {
+  text-align: center;
+  width: 45%;
+}
+
+.firma-linea {
+  width: 100%;
+  border-bottom: 1px solid #000;
+  margin-bottom: 5px;
+}
+
+/* Estilos para tablas */
+.table th {
+  background-color: #343a40;
+  color: white;
+}
+
+/* Botones personalizados */
+.btn-aje {
+  background-color: #ff6b6b;
+  border-color: #ff6b6b;
+  color: white;
+}
+
+.btn-constancia {
+  background-color: #339af0;
+  border-color: #339af0;
+  color: white;
+}
+
+.btn-varios {
+  background-color: #20c997;
+  border-color: #20c997;
+  color: white;
 }

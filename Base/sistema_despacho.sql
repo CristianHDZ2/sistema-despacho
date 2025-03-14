@@ -50,8 +50,9 @@ CREATE TABLE detalles_despacho (
     salida_manana INT NOT NULL DEFAULT 0,
     recarga_mediodia INT NOT NULL DEFAULT 0,
     retorno_tarde INT NOT NULL DEFAULT 0,
+    precio_unitario DECIMAL(10,2) NOT NULL,
     total_vendido INT GENERATED ALWAYS AS ((salida_manana + recarga_mediodia) - retorno_tarde) STORED,
-    valor_venta DECIMAL(10,2) GENERATED ALWAYS AS (total_vendido * (SELECT precio FROM productos WHERE id = producto_id)) STORED,
+    valor_venta DECIMAL(10,2) GENERATED ALWAYS AS (total_vendido * precio_unitario) STORED,
     FOREIGN KEY (despacho_id) REFERENCES despachos(id),
     FOREIGN KEY (producto_id) REFERENCES productos(id)
 );
