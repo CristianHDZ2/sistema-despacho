@@ -5,6 +5,8 @@ import { FaTruck, FaClipboardList, FaSignOutAlt, FaUser } from 'react-icons/fa';
 import DespachoForm from './DespachoForm';
 import MisDespachos from './MisDespachos';
 import MisReportes from '../Reportes/MisReportes';
+import VerDespacho from './VerDespacho';
+import EditarDespacho from './EditarDespacho';
 
 const UserDashboard = ({ user, onLogout }) => {
   const navigate = useNavigate();
@@ -99,6 +101,11 @@ const UserDashboard = ({ user, onLogout }) => {
               <Route path="/nuevo" element={<DespachoForm user={user} />} />
               <Route path="/historial" element={<MisDespachos user={user} />} />
               <Route path="/reportes" element={<MisReportes user={user} />} />
+              
+              {/* Nuevas rutas para ver y editar despachos */}
+              <Route path="/ver/:id" element={<VerDespacho user={user} />} />
+              <Route path="/editar/:id" element={<EditarDespacho user={user} />} />
+              <Route path="/reporte/:id" element={<MisReportes user={user} />} />
             </Routes>
           </div>
         </div>
