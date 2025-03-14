@@ -92,6 +92,8 @@ const DespachoForm = ({ user }) => {
           precio: parseFloat(p.precio),
           medida: p.medida,
           categoria_id: p.categoria_id,
+          categoria_nombre: p.categoria_nombre,
+          grupo: rutaSeleccionada.tipo, // Asignar el tipo de ruta como grupo
           salida_manana: 0,
           recarga_mediodia: 0,
           retorno_tarde: 0
@@ -171,19 +173,42 @@ const DespachoForm = ({ user }) => {
     }
   };
 
-  // Agrupar productos por categoría
-  const productosPorCategoria = {};
-  despacho.productos.forEach(producto => {
-    if (!productosPorCategoria[producto.categoria_id]) {
-      productosPorCategoria[producto.categoria_id] = [];
+  // Agrupar todos los productos en un solo grupo según la ruta
+  const agruparProductosPorRuta = () => {
+    if (!despacho.ruta_id || !despacho.productos.length) return {};
+    
+    const rutaSeleccionada = rutas.find(r => r.id === parseInt(despacho.ruta_id));
+    if (!rutaSeleccionada) return {};
+    
+    // Crear un único grupo según el tipo de ruta
+    const grupos = {
+      [rutaSeleccionada.tipo]: [...despacho.productos]
+    };
+    
+    // Ordenar productos por medida
+    if (grupos[rutaSeleccionada.tipo]) {
+      grupos[rutaSeleccionada.tipo].sort((a, b) => a.medida.localeCompare(b.medida));
     }
-    productosPorCategoria[producto.categoria_id].push(producto);
-  });
+    
+    return grupos;
+  };
 
-  // Ordenar productos por medida
-  Object.keys(productosPorCategoria).forEach(categoriaId => {
-    productosPorCategoria[categoriaId].sort((a, b) => a.medida.localeCompare(b.medida));
-  });
+  // Obtener clase para un tipo de ruta
+  const getTipoClass = (tipo) => {
+    switch (tipo) {
+      case 'GRUPO AJE':
+        return 'bg-danger text-white';
+      case 'LA CONSTANCIA':
+        return 'bg-primary text-white';
+      case 'PRODUCTOS VARIOS':
+        return 'bg-success text-white';
+      default:
+        return 'bg-secondary text-white';
+    }
+  };
+
+  // Obtener los productos agrupados
+  const productosAgrupados = agruparProductosPorRuta();
 
   return (
     <div className="despacho-form">
@@ -249,85 +274,75 @@ const DespachoForm = ({ user }) => {
                 <h5 className="my-1">Lista de Productos</h5>
               </div>
               <div className="card-body">
-                {Object.keys(productosPorCategoria).map(categoriaId => {
-                  const categoriaNombre = categoriaId === '1' ? 'PRODUCTOS GRUPO AJE' : 
-                                        categoriaId === '2' ? 'PRODUCTOS LA CONSTANCIA' : 
-                                        'PRODUCTOS VARIOS';
-                  
-                  const categoriaClass = categoriaId === '1' ? 'bg-danger text-white' : 
-                                       categoriaId === '2' ? 'bg-primary text-white' : 
-                                       'bg-success text-white';
-                  
-                  return (
-                    <div key={categoriaId} className="mb-4">
-                      <h6 className={`p-2 ${categoriaClass}`}>{categoriaNombre}</h6>
-                      <div className="table-responsive">
-                        <table className="table table-striped table-bordered">
-                          <thead className="table-dark">
-                            <tr>
-                              <th>Producto</th>
-                              <th>Medida</th>
-                              <th>Precio</th>
-                              <th>Salida Mañana</th>
-                              <th>Recarga Mediodía</th>
-                              <th>Retorno Tarde</th>
-                              <th>Total Vendido</th>
-                              <th>Valor Venta ($)</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {productosPorCategoria[categoriaId].map((producto, index) => {
-                              const totalIndex = despacho.productos.findIndex(p => p.producto_id === producto.producto_id);
-                              return (
-                                <tr key={producto.producto_id}>
-                                  <td>{producto.nombre}</td>
-                                  <td>{producto.medida}</td>
-                                  <td>${parseFloat(producto.precio).toFixed(2)}</td>
-                                  <td>
-                                    <input 
-                                      type="number" 
-                                      className="form-control form-control-sm" 
-                                      value={producto.salida_manana}
-                                      onChange={(e) => handleProductoChange(totalIndex, 'salida_manana', e.target.value)}
-                                      min="0"
-                                      disabled={despacho.estado !== 'salida_manana'}
-                                    />
-                                  </td>
-                                  <td>
-                                    <input 
-                                      type="number" 
-                                      className="form-control form-control-sm" 
-                                      value={producto.recarga_mediodia}
-                                      onChange={(e) => handleProductoChange(totalIndex, 'recarga_mediodia', e.target.value)}
-                                      min="0"
-                                      disabled={despacho.estado !== 'recarga_mediodia'}
-                                    />
-                                  </td>
-                                  <td>
-                                    <input 
-                                      type="number" 
-                                      className="form-control form-control-sm" 
-                                      value={producto.retorno_tarde}
-                                      onChange={(e) => handleProductoChange(totalIndex, 'retorno_tarde', e.target.value)}
-                                      min="0"
-                                      disabled={despacho.estado !== 'retorno_tarde'}
-                                    />
-                                  </td>
-                                  <td>
-                                    {calcularTotalVendido(producto)}
-                                  </td>
-                                  <td>
-                                    ${calcularValorVenta(producto).toFixed(2)}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
+                {Object.keys(productosAgrupados).map(tipoRuta => (
+                  <div key={tipoRuta} className="mb-4">
+                    <h6 className={`p-2 ${getTipoClass(tipoRuta)}`}>{tipoRuta}</h6>
+                    <div className="table-responsive">
+                      <table className="table table-striped table-bordered">
+                        <thead className="table-dark">
+                          <tr>
+                            <th>Producto</th>
+                            <th>Medida</th>
+                            <th>Precio</th>
+                            <th>Salida Mañana</th>
+                            <th>Recarga Mediodía</th>
+                            <th>Retorno Tarde</th>
+                            <th>Total Vendido</th>
+                            <th>Valor Venta ($)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {productosAgrupados[tipoRuta].map((producto) => {
+                            const totalIndex = despacho.productos.findIndex(p => p.producto_id === producto.producto_id);
+                            return (
+                              <tr key={producto.producto_id}>
+                                <td>{producto.nombre}</td>
+                                <td>{producto.medida}</td>
+                                <td>${parseFloat(producto.precio).toFixed(2)}</td>
+                                <td>
+                                  <input 
+                                    type="number" 
+                                    className="form-control form-control-sm" 
+                                    value={producto.salida_manana}
+                                    onChange={(e) => handleProductoChange(totalIndex, 'salida_manana', e.target.value)}
+                                    min="0"
+                                    disabled={despacho.estado !== 'salida_manana'}
+                                  />
+                                </td>
+                                <td>
+                                  <input 
+                                    type="number" 
+                                    className="form-control form-control-sm" 
+                                    value={producto.recarga_mediodia}
+                                    onChange={(e) => handleProductoChange(totalIndex, 'recarga_mediodia', e.target.value)}
+                                    min="0"
+                                    disabled={despacho.estado !== 'recarga_mediodia'}
+                                  />
+                                </td>
+                                <td>
+                                  <input 
+                                    type="number" 
+                                    className="form-control form-control-sm" 
+                                    value={producto.retorno_tarde}
+                                    onChange={(e) => handleProductoChange(totalIndex, 'retorno_tarde', e.target.value)}
+                                    min="0"
+                                    disabled={despacho.estado !== 'retorno_tarde'}
+                                  />
+                                </td>
+                                <td>
+                                  {calcularTotalVendido(producto)}
+                                </td>
+                                <td>
+                                  ${calcularValorVenta(producto).toFixed(2)}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
               </div>
             </div>
 
