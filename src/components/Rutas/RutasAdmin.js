@@ -1,35 +1,52 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { FaEdit, FaTrash, FaPlus, FaRoute } from 'react-icons/fa';
+import { FaEdit, FaTrash, FaPlus, FaRoute, FaCarAlt, FaUserTie } from 'react-icons/fa';
 
 const RutasAdmin = () => {
   const [rutas, setRutas] = useState([]);
+  const [motoristas, setMotoristas] = useState([]);
   const [ruta, setRuta] = useState({
     id: 0,
     nombre: '',
-    tipo: ''
+    tipo: '',
+    placa_vehiculo: '',
+    motorista_id: ''
   });
   const [modalTitle, setModalTitle] = useState('Nueva Ruta');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [errors, setErrors] = useState({});
+  const [formTouched, setFormTouched] = useState({});
 
   // Tipos de ruta disponibles
   const tiposRuta = ['GRUPO AJE', 'LA CONSTANCIA', 'PRODUCTOS VARIOS'];
 
-  // Cargar lista de rutas
-  const cargarRutas = async () => {
+  // Cargar lista de rutas y motoristas
+  const cargarDatos = async () => {
     setLoading(true);
     try {
-      const response = await axios.post('http://localhost/sistema-despacho/server/rutas.php', {
-        action: 'listar'
-      });
+      // Cargar rutas y motoristas en paralelo
+      const [rutasResponse, motoristasResponse] = await Promise.all([
+        axios.post('http://localhost/sistema-despacho/server/rutas.php', {
+          action: 'listar'
+        }),
+        axios.post('http://localhost/sistema-despacho/server/motoristas.php', {
+          action: 'listar'
+        })
+      ]);
 
-      if (response.data.success) {
-        setRutas(response.data.rutas);
+      if (rutasResponse.data.success) {
+        setRutas(rutasResponse.data.rutas);
       } else {
-        setError(response.data.mensaje || 'Error al cargar rutas');
+        setError(rutasResponse.data.mensaje || 'Error al cargar rutas');
+      }
+
+      if (motoristasResponse.data.success) {
+        setMotoristas(motoristasResponse.data.motoristas);
+      } else {
+        setError(motoristasResponse.data.mensaje || 'Error al cargar motoristas');
       }
     } catch (error) {
       setError('Error en el servidor');
@@ -40,36 +57,97 @@ const RutasAdmin = () => {
   };
 
   useEffect(() => {
-    cargarRutas();
+    cargarDatos();
   }, []);
+
+  // Validar placa de vehículo
+  const validarPlaca = (placa) => {
+    // Formato válido: P123-456 o N12345 o CC-12345
+    return /^[A-Z]{1,2}[-\s]?\d{1,5}([-\s]\d{1,3})?$/.test(placa);
+  };
+
+  // Validar formulario
+  const validateForm = () => {
+    const newErrors = {};
+    
+    if (!ruta.nombre.trim()) {
+      newErrors.nombre = 'El nombre es obligatorio';
+    }
+    
+    if (!ruta.tipo) {
+      newErrors.tipo = 'Debe seleccionar un tipo de ruta';
+    }
+    
+    if (!ruta.placa_vehiculo.trim()) {
+      newErrors.placa_vehiculo = 'La placa del vehículo es obligatoria';
+    } else if (!validarPlaca(ruta.placa_vehiculo)) {
+      newErrors.placa_vehiculo = 'Formato de placa inválido (Ej: P123-456, N12345, CC-12345)';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   // Manejar cambios en el formulario
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setRuta(prevState => ({
-      ...prevState,
-      [name]: value
-    }));
+    
+    setFormTouched({
+      ...formTouched,
+      [name]: true
+    });
+    
+    if (name === 'placa_vehiculo') {
+      // Convertir a mayúsculas para las placas
+      setRuta(prev => ({
+        ...prev,
+        [name]: value.toUpperCase()
+      }));
+    } else {
+      setRuta(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
   };
 
   // Manejar envío del formulario
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Marcar todos los campos como tocados para mostrar errores
+    const allTouched = {};
+    Object.keys(ruta).forEach(key => {
+      allTouched[key] = true;
+    });
+    setFormTouched(allTouched);
+    
+    if (!validateForm()) {
+      return;
+    }
+    
     setLoading(true);
     setError('');
     setSuccess('');
 
     try {
       const action = ruta.id === 0 ? 'crear' : 'actualizar';
+      
+      // Si motorista_id está vacío, enviarlo como null para que el backend lo maneje correctamente
+      const rutaData = {
+        ...ruta,
+        motorista_id: ruta.motorista_id || null
+      };
+      
       const response = await axios.post('http://localhost/sistema-despacho/server/rutas.php', {
         action,
-        ...ruta
+        ...rutaData
       });
 
       if (response.data.success) {
         setSuccess(response.data.mensaje);
         resetForm();
-        cargarRutas();
+        cargarDatos();
         document.getElementById('closeModalBtn').click();
       } else {
         setError(response.data.mensaje || 'Error en la operación');
@@ -87,9 +165,13 @@ const RutasAdmin = () => {
     setRuta({
       id: rt.id,
       nombre: rt.nombre,
-      tipo: rt.tipo
+      tipo: rt.tipo,
+      placa_vehiculo: rt.placa_vehiculo || '',
+      motorista_id: rt.motorista_id || ''
     });
     setModalTitle('Editar Ruta');
+    setErrors({});
+    setFormTouched({});
   };
 
   // Manejar eliminación de ruta
@@ -107,7 +189,7 @@ const RutasAdmin = () => {
 
         if (response.data.success) {
           setSuccess(response.data.mensaje);
-          cargarRutas();
+          cargarDatos();
         } else {
           setError(response.data.mensaje || 'Error al eliminar ruta');
         }
@@ -128,9 +210,13 @@ const RutasAdmin = () => {
     setRuta({
       id: 0,
       nombre: '',
-      tipo: ''
+      tipo: '',
+      placa_vehiculo: '',
+      motorista_id: ''
     });
     setModalTitle('Nueva Ruta');
+    setErrors({});
+    setFormTouched({});
   };
 
   // Obtener clase de color según tipo de ruta
@@ -145,6 +231,12 @@ const RutasAdmin = () => {
       default:
         return 'bg-secondary text-white';
     }
+  };
+  
+  // Obtener nombre de motorista por ID
+  const getMotoristaName = (id) => {
+    const motorista = motoristas.find(m => m.id === parseInt(id));
+    return motorista ? motorista.nombre : 'No asignado';
   };
 
   return (
@@ -176,6 +268,8 @@ const RutasAdmin = () => {
             <tr>
               <th>Nombre de la Ruta</th>
               <th>Tipo</th>
+              <th>Placa del Vehículo</th>
+              <th>Motorista</th>
               <th>Acciones</th>
             </tr>
           </thead>
@@ -187,6 +281,18 @@ const RutasAdmin = () => {
                   <td>
                     <span className={`badge ${getTipoClass(rt.tipo)}`}>
                       {rt.tipo}
+                    </span>
+                  </td>
+                  <td>
+                    <span className="d-flex align-items-center">
+                      <FaCarAlt className="me-2" />
+                      {rt.placa_vehiculo || 'Sin placa'}
+                    </span>
+                  </td>
+                  <td>
+                    <span className="d-flex align-items-center">
+                      <FaUserTie className="me-2" />
+                      {rt.motorista_id ? getMotoristaName(rt.motorista_id) : 'No asignado'}
                     </span>
                   </td>
                   <td>
@@ -209,7 +315,7 @@ const RutasAdmin = () => {
               ))
             ) : !loading && (
               <tr>
-                <td colSpan="3" className="text-center">No hay rutas registradas</td>
+                <td colSpan="5" className="text-center">No hay rutas registradas</td>
               </tr>
             )}
           </tbody>
@@ -230,18 +336,21 @@ const RutasAdmin = () => {
                   <label htmlFor="nombre" className="form-label">Nombre de la Ruta</label>
                   <input 
                     type="text" 
-                    className="form-control" 
+                    className={`form-control ${formTouched.nombre && errors.nombre ? 'is-invalid' : ''}`} 
                     id="nombre"
                     name="nombre"
                     value={ruta.nombre}
                     onChange={handleChange}
                     required
                   />
+                  {formTouched.nombre && errors.nombre && (
+                    <div className="invalid-feedback">{errors.nombre}</div>
+                  )}
                 </div>
                 <div className="mb-3">
                   <label htmlFor="tipo" className="form-label">Tipo de Ruta</label>
                   <select 
-                    className="form-select" 
+                    className={`form-select ${formTouched.tipo && errors.tipo ? 'is-invalid' : ''}`} 
                     id="tipo"
                     name="tipo"
                     value={ruta.tipo}
@@ -253,6 +362,51 @@ const RutasAdmin = () => {
                       <option key={index} value={tipo}>{tipo}</option>
                     ))}
                   </select>
+                  {formTouched.tipo && errors.tipo && (
+                    <div className="invalid-feedback">{errors.tipo}</div>
+                  )}
+                </div>
+                <div className="mb-3">
+                  <label htmlFor="placa_vehiculo" className="form-label">Placa del Vehículo</label>
+                  <div className="input-group">
+                    <span className="input-group-text"><FaCarAlt /></span>
+                    <input 
+                      type="text" 
+                      className={`form-control ${formTouched.placa_vehiculo && errors.placa_vehiculo ? 'is-invalid' : ''}`} 
+                      id="placa_vehiculo"
+                      name="placa_vehiculo"
+                      value={ruta.placa_vehiculo}
+                      onChange={handleChange}
+                      placeholder="Ej: P123-456"
+                      required
+                    />
+                    {formTouched.placa_vehiculo && errors.placa_vehiculo && (
+                      <div className="invalid-feedback">{errors.placa_vehiculo}</div>
+                    )}
+                  </div>
+                  <small className="form-text text-muted">
+                    Formatos válidos: P123-456, N12345, CC-12345
+                  </small>
+                </div>
+                <div className="mb-3">
+                  <label htmlFor="motorista_id" className="form-label">Motorista Asignado</label>
+                  <select 
+                    className="form-select" 
+                    id="motorista_id"
+                    name="motorista_id"
+                    value={ruta.motorista_id}
+                    onChange={handleChange}
+                  >
+                    <option value="">Seleccione un motorista (opcional)</option>
+                    {motoristas.map(mot => (
+                      <option key={mot.id} value={mot.id}>
+                        {mot.nombre} - {mot.tipo_licencia.toUpperCase()}
+                      </option>
+                    ))}
+                  </select>
+                  <small className="form-text text-muted">
+                    Si no selecciona un motorista, la ruta quedará sin asignación.
+                  </small>
                 </div>
                 <div className="modal-footer">
                   <button type="button" className="btn btn-secondary" data-bs-dismiss="modal" id="closeModalBtn">Cancelar</button>

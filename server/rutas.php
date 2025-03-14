@@ -15,7 +15,14 @@ switch ($action) {
         $id = isset($data['id']) ? intval($data['id']) : 0;
         
         if ($id > 0) {
-            $stmt = $conexion->prepare("SELECT id, nombre, tipo FROM rutas WHERE id = ?");
+            $stmt = $conexion->prepare("
+                SELECT r.id, r.nombre, r.tipo, r.placa_vehiculo, r.motorista_id, 
+                       m.nombre as motorista_nombre, m.dui as motorista_dui,
+                       m.numero_licencia, m.tipo_licencia
+                FROM rutas r
+                LEFT JOIN motoristas m ON r.motorista_id = m.id
+                WHERE r.id = ?
+            ");
             $stmt->bind_param("i", $id);
             $stmt->execute();
             $result = $stmt->get_result();
@@ -30,7 +37,13 @@ switch ($action) {
             }
             $stmt->close();
         } else {
-            $stmt = $conexion->prepare("SELECT id, nombre, tipo FROM rutas ORDER BY nombre");
+            $stmt = $conexion->prepare("
+                SELECT r.id, r.nombre, r.tipo, r.placa_vehiculo, r.motorista_id, 
+                       m.nombre as motorista_nombre
+                FROM rutas r
+                LEFT JOIN motoristas m ON r.motorista_id = m.id
+                ORDER BY r.nombre
+            ");
             $stmt->execute();
             $result = $stmt->get_result();
             
@@ -51,7 +64,14 @@ switch ($action) {
         $tipo = isset($data['tipo']) ? $data['tipo'] : '';
         
         if (!empty($tipo)) {
-            $stmt = $conexion->prepare("SELECT id, nombre, tipo FROM rutas WHERE tipo = ? ORDER BY nombre");
+            $stmt = $conexion->prepare("
+                SELECT r.id, r.nombre, r.tipo, r.placa_vehiculo, r.motorista_id, 
+                       m.nombre as motorista_nombre
+                FROM rutas r
+                LEFT JOIN motoristas m ON r.motorista_id = m.id
+                WHERE r.tipo = ? 
+                ORDER BY r.nombre
+            ");
             $stmt->bind_param("s", $tipo);
             $stmt->execute();
             $result = $stmt->get_result();
@@ -74,10 +94,12 @@ switch ($action) {
     case 'crear':
         $nombre = isset($data['nombre']) ? $data['nombre'] : '';
         $tipo = isset($data['tipo']) ? $data['tipo'] : '';
+        $placa_vehiculo = isset($data['placa_vehiculo']) ? $data['placa_vehiculo'] : '';
+        $motorista_id = isset($data['motorista_id']) ? intval($data['motorista_id']) : null;
         
         // Validar datos
-        if (empty($nombre) || empty($tipo)) {
-            $response['mensaje'] = 'Datos incompletos o inválidos';
+        if (empty($nombre) || empty($tipo) || empty($placa_vehiculo)) {
+            $response['mensaje'] = 'Nombre, tipo y placa del vehículo son obligatorios';
             break;
         }
         
@@ -88,9 +110,35 @@ switch ($action) {
             break;
         }
         
+        // Validar formato de placa (P123-456 o N12345 o CC-12345)
+        if (!preg_match('/^[A-Z]{1,2}[-\s]?\d{1,5}([-\s]\d{1,3})?$/', $placa_vehiculo)) {
+            $response['mensaje'] = 'Formato de placa inválido';
+            break;
+        }
+        
+        // Verificar que el motorista exista si se proporciona un ID
+        if ($motorista_id) {
+            $stmt = $conexion->prepare("SELECT id FROM motoristas WHERE id = ?");
+            $stmt->bind_param("i", $motorista_id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            if ($result->num_rows === 0) {
+                $response['mensaje'] = 'El motorista seleccionado no existe';
+                $stmt->close();
+                break;
+            }
+            $stmt->close();
+        }
+        
         // Insertar ruta
-        $stmt = $conexion->prepare("INSERT INTO rutas (nombre, tipo) VALUES (?, ?)");
-        $stmt->bind_param("ss", $nombre, $tipo);
+        if ($motorista_id) {
+            $stmt = $conexion->prepare("INSERT INTO rutas (nombre, tipo, placa_vehiculo, motorista_id) VALUES (?, ?, ?, ?)");
+            $stmt->bind_param("sssi", $nombre, $tipo, $placa_vehiculo, $motorista_id);
+        } else {
+            $stmt = $conexion->prepare("INSERT INTO rutas (nombre, tipo, placa_vehiculo) VALUES (?, ?, ?)");
+            $stmt->bind_param("sss", $nombre, $tipo, $placa_vehiculo);
+        }
         
         if ($stmt->execute()) {
             $response = [
@@ -108,9 +156,11 @@ switch ($action) {
         $id = isset($data['id']) ? intval($data['id']) : 0;
         $nombre = isset($data['nombre']) ? $data['nombre'] : '';
         $tipo = isset($data['tipo']) ? $data['tipo'] : '';
+        $placa_vehiculo = isset($data['placa_vehiculo']) ? $data['placa_vehiculo'] : '';
+        $motorista_id = isset($data['motorista_id']) ? intval($data['motorista_id']) : null;
         
         // Validar datos
-        if ($id <= 0 || empty($nombre) || empty($tipo)) {
+        if ($id <= 0 || empty($nombre) || empty($tipo) || empty($placa_vehiculo)) {
             $response['mensaje'] = 'Datos incompletos o inválidos';
             break;
         }
@@ -122,9 +172,35 @@ switch ($action) {
             break;
         }
         
+        // Validar formato de placa (P123-456 o N12345 o CC-12345)
+        if (!preg_match('/^[A-Z]{1,2}[-\s]?\d{1,5}([-\s]\d{1,3})?$/', $placa_vehiculo)) {
+            $response['mensaje'] = 'Formato de placa inválido';
+            break;
+        }
+        
+        // Verificar que el motorista exista si se proporciona un ID
+        if ($motorista_id) {
+            $stmt = $conexion->prepare("SELECT id FROM motoristas WHERE id = ?");
+            $stmt->bind_param("i", $motorista_id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            if ($result->num_rows === 0) {
+                $response['mensaje'] = 'El motorista seleccionado no existe';
+                $stmt->close();
+                break;
+            }
+            $stmt->close();
+        }
+        
         // Actualizar ruta
-        $stmt = $conexion->prepare("UPDATE rutas SET nombre = ?, tipo = ? WHERE id = ?");
-        $stmt->bind_param("ssi", $nombre, $tipo, $id);
+        if ($motorista_id) {
+            $stmt = $conexion->prepare("UPDATE rutas SET nombre = ?, tipo = ?, placa_vehiculo = ?, motorista_id = ? WHERE id = ?");
+            $stmt->bind_param("sssii", $nombre, $tipo, $placa_vehiculo, $motorista_id, $id);
+        } else {
+            $stmt = $conexion->prepare("UPDATE rutas SET nombre = ?, tipo = ?, placa_vehiculo = ?, motorista_id = NULL WHERE id = ?");
+            $stmt->bind_param("sssi", $nombre, $tipo, $placa_vehiculo, $id);
+        }
         
         if ($stmt->execute()) {
             $response = [

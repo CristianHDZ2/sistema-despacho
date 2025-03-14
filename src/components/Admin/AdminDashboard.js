@@ -1,11 +1,12 @@
 import React from 'react';
 import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
-import { FaUsers, FaBoxes, FaRoute, FaChartBar, FaSignOutAlt } from 'react-icons/fa';
+import { FaUsers, FaBoxes, FaRoute, FaChartBar, FaSignOutAlt, FaUserTie } from 'react-icons/fa';
 
 import UsuariosAdmin from './UsuariosAdmin';
 import ProductosAdmin from '../Productos/ProductosAdmin';
 import RutasAdmin from '../Rutas/RutasAdmin';
 import ReportesAdmin from '../Reportes/ReportesAdmin';
+import MotoristasAdmin from '../Motoristas/MotoristasAdmin';
 
 const AdminDashboard = ({ user, onLogout }) => {
   const navigate = useNavigate();
@@ -62,6 +63,12 @@ const AdminDashboard = ({ user, onLogout }) => {
                 <FaRoute /> Rutas
               </Link>
               <Link 
+                to="/admin/motoristas" 
+                className={`sidebar-link ${location.pathname.includes('/admin/motoristas') ? 'active' : ''}`}
+              >
+                <FaUserTie /> Motoristas
+              </Link>
+              <Link 
                 to="/admin/reportes" 
                 className={`sidebar-link ${location.pathname.includes('/admin/reportes') ? 'active' : ''}`}
               >
@@ -78,6 +85,7 @@ const AdminDashboard = ({ user, onLogout }) => {
               <Route path="/usuarios/*" element={<UsuariosAdmin />} />
               <Route path="/productos/*" element={<ProductosAdmin />} />
               <Route path="/rutas/*" element={<RutasAdmin />} />
+              <Route path="/motoristas/*" element={<MotoristasAdmin />} />
               <Route path="/reportes/*" element={<ReportesAdmin />} />
             </Routes>
           </div>
