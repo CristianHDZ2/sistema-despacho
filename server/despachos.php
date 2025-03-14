@@ -127,6 +127,55 @@ switch ($action) {
         $stmt->close();
         break;
 
+    case 'verificarRutaDisponible':
+        $ruta_id = isset($data['ruta_id']) ? intval($data['ruta_id']) : 0;
+        $fecha = isset($data['fecha']) ? $data['fecha'] : date('Y-m-d');
+        
+        if ($ruta_id <= 0) {
+            $response['mensaje'] = 'ID de ruta inválido';
+            $response['disponible'] = false;
+            break;
+        }
+        
+        // Verificar si ya existe un despacho para esta ruta en la fecha especificada
+        $stmt = $conexion->prepare("
+            SELECT id, usuario_id, estado 
+            FROM despachos 
+            WHERE ruta_id = ? AND fecha = ?
+        ");
+        $stmt->bind_param("is", $ruta_id, $fecha);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result->num_rows > 0) {
+            // La ruta ya tiene un despacho para esa fecha
+            $despacho = $result->fetch_assoc();
+            
+            // Obtener nombre del usuario que registró el despacho
+            $stmt2 = $conexion->prepare("SELECT nombre FROM usuarios WHERE id = ?");
+            $stmt2->bind_param("i", $despacho['usuario_id']);
+            $stmt2->execute();
+            $usuario = $stmt2->get_result()->fetch_assoc();
+            $stmt2->close();
+            
+            $response = [
+                'success' => true,
+                'disponible' => false,
+                'despacho_id' => $despacho['id'],
+                'usuario' => $usuario['nombre'],
+                'estado' => $despacho['estado'],
+                'mensaje' => 'Esta ruta ya tiene un despacho registrado para la fecha ' . $fecha
+            ];
+        } else {
+            // La ruta está disponible para la fecha especificada
+            $response = [
+                'success' => true,
+                'disponible' => true
+            ];
+        }
+        $stmt->close();
+        break;
+
     case 'crear':
         $despachoData = isset($data['despacho']) ? $data['despacho'] : null;
         
@@ -151,12 +200,12 @@ switch ($action) {
         $conexion->begin_transaction();
         
         try {
-            // Verificar si ya existe un despacho para esta ruta, fecha y usuario
+            // Verificar si ya existe un despacho para esta ruta y fecha
             $stmt = $conexion->prepare("
                 SELECT id, estado FROM despachos 
-                WHERE ruta_id = ? AND fecha = ? AND usuario_id = ?
+                WHERE ruta_id = ? AND fecha = ?
             ");
-            $stmt->bind_param("isi", $ruta_id, $fecha, $usuario_id);
+            $stmt->bind_param("is", $ruta_id, $fecha);
             $stmt->execute();
             $result = $stmt->get_result();
             
@@ -270,6 +319,20 @@ switch ($action) {
                 // Crear nuevo despacho
                 if ($estado != 'salida_manana') {
                     $response['mensaje'] = 'Para un nuevo despacho, el estado debe ser Salida Mañana';
+                    $conexion->rollback();
+                    break;
+                }
+
+                // NUEVA VALIDACIÓN: Verificar nuevamente que la ruta no esté registrada para esta fecha
+                // Esta doble verificación es importante por si dos usuarios intentan registrar al mismo tiempo
+                $stmt = $conexion->prepare("
+                    SELECT id FROM despachos 
+                    WHERE ruta_id = ? AND fecha = ? LIMIT 1
+                ");
+                $stmt->bind_param("is", $ruta_id, $fecha);
+                $stmt->execute();
+                if ($stmt->get_result()->num_rows > 0) {
+                    $response['mensaje'] = 'Esta ruta ya tiene un despacho registrado para la fecha ' . $fecha;
                     $conexion->rollback();
                     break;
                 }

@@ -61,6 +61,19 @@ const MisDespachos = ({ user }) => {
     });
   };
 
+  // Verificar si un despacho puede ser actualizado (solo el mismo día)
+  const puedeActualizar = (despacho) => {
+    // No se puede actualizar si ya está completado
+    if (despacho.estado === 'completado') return false;
+    
+    // Obtener la fecha actual y la fecha del despacho en formato YYYY-MM-DD
+    const hoy = new Date().toISOString().split('T')[0];
+    const fechaDespacho = despacho.fecha;
+    
+    // Solo permitir actualizar si es el mismo día
+    return hoy === fechaDespacho;
+  };
+
   return (
     <div className="mis-despachos">
       <h2 className="mb-4">Mis Despachos</h2>
@@ -104,7 +117,7 @@ const MisDespachos = ({ user }) => {
                           <FaEye /> Ver
                         </button>
                         
-                        {despacho.estado !== 'completado' && (
+                        {despacho.estado !== 'completado' && puedeActualizar(despacho) && (
                           <button 
                             className="btn btn-sm btn-warning me-1" 
                             onClick={() => navigate(`/despacho/editar/${despacho.id}`)}
@@ -113,14 +126,14 @@ const MisDespachos = ({ user }) => {
                           </button>
                         )}
                         
-                        {despacho.estado === 'retorno_tarde' || despacho.estado === 'completado' ? (
+                        {(despacho.estado === 'retorno_tarde' || despacho.estado === 'completado') && (
                           <button 
                             className="btn btn-sm btn-primary" 
                             onClick={() => navigate(`/despacho/reporte/${despacho.id}`)}
                           >
                             <FaPrint /> Reporte
                           </button>
-                        ) : null}
+                        )}
                       </td>
                     </tr>
                   ))}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { FaSave, FaTimes, FaPlus, FaMinus } from 'react-icons/fa';
+import { FaSave, FaTimes, FaPlus, FaMinus, FaExclamationTriangle } from 'react-icons/fa';
 
 const DespachoForm = ({ user }) => {
   const navigate = useNavigate();
@@ -10,6 +10,8 @@ const DespachoForm = ({ user }) => {
   const [success, setSuccess] = useState('');
   const [rutas, setRutas] = useState([]);
   const [productos, setProductos] = useState([]);
+  const [rutaDisponible, setRutaDisponible] = useState(true);
+  const [rutaInfo, setRutaInfo] = useState(null);
   const [despacho, setDespacho] = useState({
     ruta_id: '',
     fecha: new Date().toISOString().split('T')[0],
@@ -32,6 +34,7 @@ const DespachoForm = ({ user }) => {
         ]);
 
         if (rutasRes.data.success) {
+          // Asegurarnos de que todas las rutas tengan la información del motorista
           setRutas(rutasRes.data.rutas);
         } else {
           setError(rutasRes.data.mensaje || 'Error al cargar rutas');
@@ -53,6 +56,52 @@ const DespachoForm = ({ user }) => {
     cargarDatos();
   }, []);
 
+  // Verificar disponibilidad de ruta cada vez que cambia la fecha o la ruta
+  useEffect(() => {
+    // Solo verificar si hay una ruta seleccionada
+    if (despacho.ruta_id && despacho.fecha) {
+      verificarRutaDisponible(despacho.ruta_id, despacho.fecha);
+    }
+  }, [despacho.ruta_id, despacho.fecha]);
+
+  // Verificar si la ruta está disponible para la fecha seleccionada
+  const verificarRutaDisponible = async (rutaId, fecha) => {
+    try {
+      setLoading(true);
+      const response = await axios.post('http://localhost/sistema-despacho/server/despachos.php', {
+        action: 'verificarRutaDisponible',
+        ruta_id: rutaId,
+        fecha: fecha
+      });
+
+      if (response.data.success) {
+        setRutaDisponible(response.data.disponible);
+        if (!response.data.disponible) {
+          setRutaInfo({
+            despacho_id: response.data.despacho_id,
+            usuario: response.data.usuario,
+            estado: response.data.estado,
+            mensaje: response.data.mensaje
+          });
+        } else {
+          setRutaInfo(null);
+        }
+      }
+    } catch (error) {
+      console.error('Error al verificar ruta:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Manejar cambio de fecha
+  const handleFechaChange = (e) => {
+    const nuevaFecha = e.target.value;
+    setDespacho(prev => ({ ...prev, fecha: nuevaFecha }));
+    
+    // La verificación se hará en el useEffect
+  };
+
   // Manejar selección de ruta
   const handleRutaChange = (e) => {
     const rutaId = e.target.value;
@@ -62,6 +111,8 @@ const DespachoForm = ({ user }) => {
       productos: []
     }));
 
+    // La verificación se hará en el useEffect
+    
     if (rutaId) {
       // Obtener tipo de ruta seleccionada
       const rutaSeleccionada = rutas.find(r => r.id === parseInt(rutaId));
@@ -92,7 +143,7 @@ const DespachoForm = ({ user }) => {
           precio: parseFloat(p.precio),
           medida: p.medida,
           categoria_id: p.categoria_id,
-          categoria_nombre: p.categoria_nombre,
+          categoria_nombre: p.categoria_nombre || '',
           grupo: rutaSeleccionada.tipo, // Asignar el tipo de ruta como grupo
           salida_manana: 0,
           recarga_mediodia: 0,
@@ -132,6 +183,15 @@ const DespachoForm = ({ user }) => {
   // Manejar envío del formulario
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Verificar una vez más si la ruta está disponible antes de enviar
+    await verificarRutaDisponible(despacho.ruta_id, despacho.fecha);
+    
+    if (!rutaDisponible) {
+      setError(`No se puede registrar este despacho. ${rutaInfo?.mensaje}`);
+      return;
+    }
+    
     setLoading(true);
     setError('');
     setSuccess('');
@@ -216,6 +276,16 @@ const DespachoForm = ({ user }) => {
       
       {error && <div className="alert alert-danger">{error}</div>}
       {success && <div className="alert alert-success">{success}</div>}
+      
+      {/* Alerta cuando la ruta no está disponible */}
+      {!rutaDisponible && rutaInfo && (
+        <div className="alert alert-warning">
+          <FaExclamationTriangle className="me-2" />
+          <strong>Ruta no disponible:</strong> {rutaInfo.mensaje}. 
+          <br />
+          <small>Registrado por: {rutaInfo.usuario}</small>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit}>
         <div className="row mb-4">
@@ -227,7 +297,7 @@ const DespachoForm = ({ user }) => {
                 className="form-control" 
                 id="fecha"
                 value={despacho.fecha}
-                onChange={(e) => setDespacho(prev => ({ ...prev, fecha: e.target.value }))}
+                onChange={handleFechaChange}
                 required
               />
             </div>
@@ -244,7 +314,9 @@ const DespachoForm = ({ user }) => {
               >
                 <option value="">Seleccione una ruta</option>
                 {rutas.map(ruta => (
-                  <option key={ruta.id} value={ruta.id}>{ruta.nombre} - {ruta.tipo}</option>
+                  <option key={ruta.id} value={ruta.id}>
+                    {ruta.nombre} - {ruta.motorista_nombre ? ruta.motorista_nombre : 'Sin motorista'} ({ruta.tipo})
+                  </option>
                 ))}
               </select>
             </div>
@@ -267,7 +339,8 @@ const DespachoForm = ({ user }) => {
           </div>
         </div>
 
-        {despacho.ruta_id && despacho.productos.length > 0 ? (
+        {/* Deshabilitar el formulario si la ruta no está disponible */}
+        {despacho.ruta_id && despacho.productos.length > 0 && rutaDisponible ? (
           <>
             <div className="card mb-4">
               <div className="card-header bg-secondary text-white">
@@ -358,12 +431,16 @@ const DespachoForm = ({ user }) => {
               <button 
                 type="submit" 
                 className="btn btn-primary" 
-                disabled={loading}
+                disabled={loading || !rutaDisponible}
               >
                 <FaSave /> {loading ? 'Guardando...' : 'Guardar Despacho'}
               </button>
             </div>
           </>
+        ) : despacho.ruta_id && !rutaDisponible ? (
+          <div className="alert alert-danger">
+            <p className="mb-0">No se puede crear un despacho para esta ruta en esta fecha.</p>
+          </div>
         ) : despacho.ruta_id && (
           <div className="alert alert-info">
             <p className="mb-0">Cargando productos para esta ruta...</p>
