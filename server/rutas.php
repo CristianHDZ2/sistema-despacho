@@ -129,7 +129,35 @@ switch ($action) {
                 break;
             }
             $stmt->close();
+            
+            // Verificar que el motorista no esté asignado a otra ruta
+            $stmt = $conexion->prepare("SELECT id, nombre FROM rutas WHERE motorista_id = ?");
+            $stmt->bind_param("i", $motorista_id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            if ($result->num_rows > 0) {
+                $rutaExistente = $result->fetch_assoc();
+                $response['mensaje'] = "El motorista ya está asignado a la ruta: " . $rutaExistente['nombre'];
+                $stmt->close();
+                break;
+            }
+            $stmt->close();
         }
+        
+        // Verificar que la placa no esté asignada a otra ruta
+        $stmt = $conexion->prepare("SELECT id, nombre FROM rutas WHERE placa_vehiculo = ?");
+        $stmt->bind_param("s", $placa_vehiculo);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result->num_rows > 0) {
+            $rutaExistente = $result->fetch_assoc();
+            $response['mensaje'] = "La placa ya está asignada a la ruta: " . $rutaExistente['nombre'];
+            $stmt->close();
+            break;
+        }
+        $stmt->close();
         
         // Insertar ruta
         if ($motorista_id) {
@@ -178,6 +206,21 @@ switch ($action) {
             break;
         }
         
+        // Obtener datos actuales de la ruta
+        $stmt = $conexion->prepare("SELECT motorista_id, placa_vehiculo FROM rutas WHERE id = ?");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result->num_rows === 0) {
+            $response['mensaje'] = 'Ruta no encontrada';
+            $stmt->close();
+            break;
+        }
+        
+        $rutaActual = $result->fetch_assoc();
+        $stmt->close();
+        
         // Verificar que el motorista exista si se proporciona un ID
         if ($motorista_id) {
             $stmt = $conexion->prepare("SELECT id FROM motoristas WHERE id = ?");
@@ -187,6 +230,38 @@ switch ($action) {
             
             if ($result->num_rows === 0) {
                 $response['mensaje'] = 'El motorista seleccionado no existe';
+                $stmt->close();
+                break;
+            }
+            $stmt->close();
+            
+            // Verificar que el motorista no esté asignado a otra ruta (solo si es diferente al actual)
+            if ($motorista_id != $rutaActual['motorista_id']) {
+                $stmt = $conexion->prepare("SELECT id, nombre FROM rutas WHERE motorista_id = ? AND id != ?");
+                $stmt->bind_param("ii", $motorista_id, $id);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                
+                if ($result->num_rows > 0) {
+                    $rutaExistente = $result->fetch_assoc();
+                    $response['mensaje'] = "El motorista ya está asignado a la ruta: " . $rutaExistente['nombre'];
+                    $stmt->close();
+                    break;
+                }
+                $stmt->close();
+            }
+        }
+        
+        // Verificar que la placa no esté asignada a otra ruta (solo si es diferente a la actual)
+        if ($placa_vehiculo != $rutaActual['placa_vehiculo']) {
+            $stmt = $conexion->prepare("SELECT id, nombre FROM rutas WHERE placa_vehiculo = ? AND id != ?");
+            $stmt->bind_param("si", $placa_vehiculo, $id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            if ($result->num_rows > 0) {
+                $rutaExistente = $result->fetch_assoc();
+                $response['mensaje'] = "La placa ya está asignada a la ruta: " . $rutaExistente['nombre'];
                 $stmt->close();
                 break;
             }
@@ -242,6 +317,69 @@ switch ($action) {
             $response['mensaje'] = 'Error al eliminar la ruta o la ruta no existe';
         }
         $stmt->close();
+        break;
+
+    case 'verificarDisponibilidad':
+        $motorista_id = isset($data['motorista_id']) ? intval($data['motorista_id']) : 0;
+        $placa_vehiculo = isset($data['placa_vehiculo']) ? $data['placa_vehiculo'] : '';
+        $ruta_id = isset($data['ruta_id']) ? intval($data['ruta_id']) : 0;
+        
+        $response['disponibilidad'] = [
+            'motorista' => true,
+            'placa' => true
+        ];
+        $response['success'] = true;
+        
+        // Verificar disponibilidad del motorista
+        if ($motorista_id > 0) {
+            $sql = "SELECT id, nombre FROM rutas WHERE motorista_id = ?";
+            $params = [$motorista_id];
+            $types = "i";
+            
+            if ($ruta_id > 0) {
+                $sql .= " AND id != ?";
+                $params[] = $ruta_id;
+                $types .= "i";
+            }
+            
+            $stmt = $conexion->prepare($sql);
+            $stmt->bind_param($types, ...$params);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            if ($result->num_rows > 0) {
+                $rutaExistente = $result->fetch_assoc();
+                $response['disponibilidad']['motorista'] = false;
+                $response['rutaMotorista'] = $rutaExistente['nombre'];
+            }
+            $stmt->close();
+        }
+        
+        // Verificar disponibilidad de la placa
+        if (!empty($placa_vehiculo)) {
+            $sql = "SELECT id, nombre FROM rutas WHERE placa_vehiculo = ?";
+            $params = [$placa_vehiculo];
+            $types = "s";
+            
+            if ($ruta_id > 0) {
+                $sql .= " AND id != ?";
+                $params[] = $ruta_id;
+                $types .= "i";
+            }
+            
+            $stmt = $conexion->prepare($sql);
+            $stmt->bind_param($types, ...$params);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            if ($result->num_rows > 0) {
+                $rutaExistente = $result->fetch_assoc();
+                $response['disponibilidad']['placa'] = false;
+                $response['rutaPlaca'] = $rutaExistente['nombre'];
+            }
+            $stmt->close();
+        }
+        
         break;
         
     default:

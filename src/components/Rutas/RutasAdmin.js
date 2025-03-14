@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { FaEdit, FaTrash, FaPlus, FaRoute, FaCarAlt, FaUserTie } from 'react-icons/fa';
+import { FaEdit, FaTrash, FaPlus, FaRoute, FaCarAlt, FaUserTie, FaExclamationCircle } from 'react-icons/fa';
 
 const RutasAdmin = () => {
   const [rutas, setRutas] = useState([]);
@@ -19,6 +19,12 @@ const RutasAdmin = () => {
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [errors, setErrors] = useState({});
   const [formTouched, setFormTouched] = useState({});
+  const [disponibilidad, setDisponibilidad] = useState({
+    motorista: true,
+    placa: true,
+    rutaMotorista: '',
+    rutaPlaca: ''
+  });
 
   // Tipos de ruta disponibles
   const tiposRuta = ['GRUPO AJE', 'LA CONSTANCIA', 'PRODUCTOS VARIOS'];
@@ -66,8 +72,41 @@ const RutasAdmin = () => {
     return /^[A-Z]{1,2}[-\s]?\d{1,5}([-\s]\d{1,3})?$/.test(placa);
   };
 
+  // Verificar disponibilidad de motorista y placa
+  const verificarDisponibilidad = async (motorista_id, placa_vehiculo, ruta_id = 0) => {
+    try {
+      const response = await axios.post('http://localhost/sistema-despacho/server/rutas.php', {
+        action: 'verificarDisponibilidad',
+        motorista_id,
+        placa_vehiculo,
+        ruta_id
+      });
+
+      if (response.data.success) {
+        const disponible = {
+          motorista: response.data.disponibilidad.motorista,
+          placa: response.data.disponibilidad.placa,
+          rutaMotorista: response.data.rutaMotorista || '',
+          rutaPlaca: response.data.rutaPlaca || ''
+        };
+        setDisponibilidad(disponible);
+        return disponible;
+      }
+    } catch (error) {
+      console.error('Error al verificar disponibilidad:', error);
+    }
+
+    // Por defecto, asumir que están disponibles
+    return {
+      motorista: true,
+      placa: true,
+      rutaMotorista: '',
+      rutaPlaca: ''
+    };
+  };
+
   // Validar formulario
-  const validateForm = () => {
+  const validateForm = async () => {
     const newErrors = {};
     
     if (!ruta.nombre.trim()) {
@@ -84,12 +123,29 @@ const RutasAdmin = () => {
       newErrors.placa_vehiculo = 'Formato de placa inválido (Ej: P123-456, N12345, CC-12345)';
     }
     
+    // Verificar disponibilidad en tiempo real
+    if (ruta.motorista_id || ruta.placa_vehiculo) {
+      const disponible = await verificarDisponibilidad(
+        ruta.motorista_id, 
+        ruta.placa_vehiculo,
+        ruta.id
+      );
+      
+      if (ruta.motorista_id && !disponible.motorista) {
+        newErrors.motorista_id = `Este motorista ya está asignado a la ruta: ${disponible.rutaMotorista}`;
+      }
+      
+      if (ruta.placa_vehiculo && !disponible.placa) {
+        newErrors.placa_vehiculo = `Esta placa ya está asignada a la ruta: ${disponible.rutaPlaca}`;
+      }
+    }
+    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   // Manejar cambios en el formulario
-  const handleChange = (e) => {
+  const handleChange = async (e) => {
     const { name, value } = e.target;
     
     setFormTouched({
@@ -97,17 +153,26 @@ const RutasAdmin = () => {
       [name]: true
     });
     
+    let newValue = value;
+    
     if (name === 'placa_vehiculo') {
       // Convertir a mayúsculas para las placas
-      setRuta(prev => ({
-        ...prev,
-        [name]: value.toUpperCase()
-      }));
-    } else {
-      setRuta(prev => ({
-        ...prev,
-        [name]: value
-      }));
+      newValue = value.toUpperCase();
+    }
+    
+    setRuta(prev => ({
+      ...prev,
+      [name]: newValue
+    }));
+    
+    // Verificar disponibilidad en tiempo real cuando cambia motorista o placa
+    if ((name === 'motorista_id' && value) || (name === 'placa_vehiculo' && value.trim())) {
+      const motorista_id = name === 'motorista_id' ? value : ruta.motorista_id;
+      const placa_vehiculo = name === 'placa_vehiculo' ? newValue : ruta.placa_vehiculo;
+      
+      if (motorista_id || placa_vehiculo) {
+        await verificarDisponibilidad(motorista_id, placa_vehiculo, ruta.id);
+      }
     }
   };
 
@@ -122,7 +187,7 @@ const RutasAdmin = () => {
     });
     setFormTouched(allTouched);
     
-    if (!validateForm()) {
+    if (!(await validateForm())) {
       return;
     }
     
@@ -161,7 +226,7 @@ const RutasAdmin = () => {
   };
 
   // Manejar edición de ruta
-  const handleEdit = (rt) => {
+  const handleEdit = async (rt) => {
     setRuta({
       id: rt.id,
       nombre: rt.nombre,
@@ -172,6 +237,14 @@ const RutasAdmin = () => {
     setModalTitle('Editar Ruta');
     setErrors({});
     setFormTouched({});
+    
+    // Resetear estado de disponibilidad
+    setDisponibilidad({
+      motorista: true,
+      placa: true,
+      rutaMotorista: '',
+      rutaPlaca: ''
+    });
   };
 
   // Manejar eliminación de ruta
@@ -217,6 +290,13 @@ const RutasAdmin = () => {
     setModalTitle('Nueva Ruta');
     setErrors({});
     setFormTouched({});
+    // Resetear estado de disponibilidad
+    setDisponibilidad({
+      motorista: true,
+      placa: true,
+      rutaMotorista: '',
+      rutaPlaca: ''
+    });
   };
 
   // Obtener clase de color según tipo de ruta
@@ -387,11 +467,17 @@ const RutasAdmin = () => {
                   <small className="form-text text-muted">
                     Formatos válidos: P123-456, N12345, CC-12345
                   </small>
+                  {!errors.placa_vehiculo && formTouched.placa_vehiculo && ruta.placa_vehiculo && !disponibilidad.placa && (
+                    <div className="alert alert-warning mt-2">
+                      <FaExclamationCircle className="me-2" />
+                      Esta placa ya está asignada a la ruta: {disponibilidad.rutaPlaca}
+                    </div>
+                  )}
                 </div>
                 <div className="mb-3">
                   <label htmlFor="motorista_id" className="form-label">Motorista Asignado</label>
                   <select 
-                    className="form-select" 
+                    className={`form-select ${formTouched.motorista_id && errors.motorista_id ? 'is-invalid' : ''}`}
                     id="motorista_id"
                     name="motorista_id"
                     value={ruta.motorista_id}
@@ -404,9 +490,18 @@ const RutasAdmin = () => {
                       </option>
                     ))}
                   </select>
+                  {formTouched.motorista_id && errors.motorista_id && (
+                    <div className="invalid-feedback">{errors.motorista_id}</div>
+                  )}
                   <small className="form-text text-muted">
                     Si no selecciona un motorista, la ruta quedará sin asignación.
                   </small>
+                  {!errors.motorista_id && formTouched.motorista_id && ruta.motorista_id && !disponibilidad.motorista && (
+                    <div className="alert alert-warning mt-2">
+                      <FaExclamationCircle className="me-2" />
+                      Este motorista ya está asignado a la ruta: {disponibilidad.rutaMotorista}
+                    </div>
+                  )}
                 </div>
                 <div className="modal-footer">
                   <button type="button" className="btn btn-secondary" data-bs-dismiss="modal" id="closeModalBtn">Cancelar</button>
