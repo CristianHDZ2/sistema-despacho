@@ -1,5 +1,5 @@
 -- Crear base de datos si no existe
-CREATE DATABASE IF NOT EXISTS `sistema_despacho` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+CREATE DATABASE IF NOT EXISTS `sistema_despacho_distribuidora_morales` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 USE `sistema_despacho`;
 
 -- Tabla de categorías (dinámicas, gestionadas por el administrador)
